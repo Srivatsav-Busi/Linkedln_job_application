@@ -19,8 +19,15 @@ version:    24.12.3.10.30
 
 
 # Login Credentials for LinkedIn (Optional)
-username = "username@example.com"       # Enter your username in the quotes
-password = "example_password"           # Enter your password in the quotes
+# Set via env (.env supported): LINKEDIN_USERNAME, LINKEDIN_PASSWORD
+try:
+    from config.env import get_env
+except Exception:
+    def get_env(key: str, default: str = "") -> str:
+        return default
+
+username = get_env("LINKEDIN_USERNAME", "username@example.com")  # Enter your username in the quotes
+password = get_env("LINKEDIN_PASSWORD", "example_password")      # Enter your password in the quotes
 
 
 ## Artificial Intelligence (Beta Not-Recommended)

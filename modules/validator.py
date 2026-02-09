@@ -198,6 +198,10 @@ def validate_settings() -> None | ValueError | TypeError:
     check_boolean(run_non_stop, "run_non_stop")
     check_boolean(alternate_sortby, "alternate_sortby")
     check_boolean(cycle_date_posted, "cycle_date_posted")
+
+    ##> ------ OpenAI Codex : codex - Feature ------
+    check_int(application_gap_seconds, "application_gap_seconds", 0)
+    ##<
     check_boolean(stop_date_cycle_at_24hr, "stop_date_cycle_at_24hr")
     
     # check_string(generated_resume_path, "generated_resume_path", min_length=1)
@@ -232,4 +236,3 @@ def validate_config() -> bool | ValueError | TypeError:
     # validate_String(chatGPT_password, "chatGPT_password")
     # validate_String(chatGPT_resume_chat_title, "chatGPT_resume_chat_title")
     return True
-

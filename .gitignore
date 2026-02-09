@@ -8,7 +8,13 @@ logs
 
 old
 
-secrets.py
-config/personals.py
+.env
+config/local.py
+.env.*
 .venv
 apikeys.py
+
+/*.docx
+/*.pdf
+~$*.docx
+Screenshot*.png

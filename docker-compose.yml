@@ -1,0 +1,9 @@
+services:
+  applied-jobs-ui:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - APPLIED_JOBS_PATH=all excels/
+    volumes:
+      - './all excels:/app/all excels'

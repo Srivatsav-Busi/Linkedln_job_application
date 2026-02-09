@@ -79,6 +79,11 @@ external_jobs_count = 0
 failed_count = 0
 skip_count = 0
 dailyEasyApplyLimitReached = False
+application_target_reached = False
+batch_apply_limit = 25
+batch_break_seconds = 1200
+total_apply_target = 25
+last_break_at = 0
 
 re_experience = re.compile(r'[(]?\s*(\d+)\s*[)]?\s*[-to]*\s*\d*[+]*\s*year[s]?', re.IGNORECASE)
 
@@ -95,9 +100,7 @@ notice_period_weeks = str(notice_period//7)
 notice_period = str(notice_period)
 
 aiClient = None
-##> ------ Dheeraj Deshwal : dheeraj9811 Email:dheeraj20194@iiitd.ac.in/dheerajdeshwal9811@gmail.com - Feature ------
 about_company_for_ai = None # TODO extract about company for AI
-##<
 
 #>
 
@@ -209,14 +212,80 @@ def apply_filters() -> None:
     '''
     set_search_location()
 
+    def select_date_posted_in_modal(text: str) -> bool:
+        if not text:
+            return False
+        try:
+            modal = driver.find_element(
+                By.XPATH,
+                '//div[contains(@class,"jobs-search-advanced-filters") or contains(@class,"artdeco-modal") or @role="dialog"]',
+            )
+            # Expand the "Date posted" section if it is collapsible.
+            try:
+                date_section_btn = modal.find_element(
+                    By.XPATH,
+                    './/button[.//span[normalize-space(.)="Date posted"] or .//h3[normalize-space(.)="Date posted"]]',
+                )
+                date_section_btn.click()
+                buffer(click_gap)
+            except Exception:
+                pass
+            label = modal.find_element(By.XPATH, './/label[.//span[normalize-space(.)="'+text+'"]]')
+            input_el = label.find_element(By.XPATH, './/input[@type="radio"]')
+            driver.execute_script('arguments[0].scrollIntoView({block: "center"});', label)
+            driver.execute_script("arguments[0].click();", input_el)
+            buffer(click_gap)
+            return input_el.is_selected()
+        except Exception:
+            return False
+
+    def select_date_posted_dropdown(text: str) -> bool:
+        if not text:
+            return False
+        try:
+            date_button = driver.find_element(
+                By.XPATH,
+                '//button[.//span[normalize-space(.)="Date posted"] or contains(@aria-label, "Date posted")]',
+            )
+            date_button.click()
+            buffer(click_gap)
+
+            option = driver.find_element(By.XPATH, './/span[normalize-space(.)="'+text+'"]')
+            driver.execute_script('arguments[0].scrollIntoView({block: "center"});', option)
+            option.click()
+            buffer(click_gap)
+
+            show_btn = driver.find_elements(By.XPATH, '//button[starts-with(normalize-space(.), "Show ") or contains(@aria-label, "Show")]')
+            if show_btn:
+                show_btn[0].click()
+                buffer(click_gap)
+            return True
+        except Exception:
+            return False
+
     try:
         recommended_wait = 1 if click_gap < 1 else 0
 
-        wait.until(EC.presence_of_element_located((By.XPATH, '//button[normalize-space()="All filters"]'))).click()
+        all_filters_button = wait.until(EC.element_to_be_clickable((By.XPATH, '//button[normalize-space()="All filters"]')))
+        try:
+            all_filters_button.click()
+        except:
+            driver.execute_script("arguments[0].click();", all_filters_button)
         buffer(recommended_wait)
 
+        if manual_filters:
+            pyautogui.alert(
+                f"Please set all filters manually in LinkedIn and click 'Show results'.\n\nContinuing automatically in {manual_filters_wait_seconds} seconds.",
+                "Manual Filters",
+                "OK",
+            )
+            sleep(max(0, int(manual_filters_wait_seconds)))
+            return
+
         wait_span_click(driver, sort_by)
-        wait_span_click(driver, date_posted)
+        if date_posted and not select_date_posted_in_modal(date_posted):
+            if not select_date_posted_dropdown(date_posted):
+                wait_span_click(driver, date_posted)
         buffer(recommended_wait)
 
         multi_sel_noWait(driver, experience_level) 
@@ -383,9 +452,7 @@ def get_job_description(
     - `skipMessage: str | None`
     '''
     try:
-        ##> ------ Dheeraj Deshwal : dheeraj9811 Email:dheeraj20194@iiitd.ac.in/dheerajdeshwal9811@gmail.com - Feature ------
         jobDescription = "Unknown"
-        ##<
         experience_required = "Unknown"
         found_masters = 0
         jobDescription = find_by_class(driver, "jobs-box__html-content").text
@@ -466,7 +533,6 @@ def answer_questions(modal: WebElement, questions_list: set, work_location: str,
                 options = "".join([f' "{option}",' for option in optionsText])
             prev_answer = selected_option
             if overwrite_previous_answers or selected_option == "Select an option":
-                ##> ------ WINDY_WINDWARD Email:karthik.sarode23@gmail.com - Added fuzzy logic to answer location based questions ------
                 if 'email' in label or 'phone' in label: 
                     answer = prev_answer
                 elif 'gender' in label or 'sex' in label: 
@@ -868,7 +934,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
     applied_jobs = get_applied_job_ids()
     rejected_jobs = set()
     blacklisted_companies = set()
-    global current_city, failed_count, skip_count, easy_applied_count, external_jobs_count, tabs_count, pause_before_submit, pause_at_failed_question, useNewResume
+    global current_city, failed_count, skip_count, easy_applied_count, external_jobs_count, tabs_count, pause_before_submit, pause_at_failed_question, useNewResume, application_target_reached, last_break_at
     current_city = current_city.strip()
 
     if randomize_search_order:  shuffle(search_terms)
@@ -1084,6 +1150,22 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     if application_link == "Easy Applied": easy_applied_count += 1
                     else:   external_jobs_count += 1
                     applied_jobs.add(job_id)
+                    total_applied = easy_applied_count + external_jobs_count
+                    if total_applied >= total_apply_target:
+                        print_lg(f"Target reached: {total_applied} applications. Stopping.")
+                        application_target_reached = True
+                        return
+
+                    ##> ------ OpenAI Codex : codex - Feature ------
+                    if application_gap_seconds > 0:
+                        print_lg(f"Waiting {application_gap_seconds} seconds before next application...")
+                        sleep(application_gap_seconds)
+                    ##<
+
+                    if total_applied % batch_apply_limit == 0 and total_applied != last_break_at:
+                        last_break_at = total_applied
+                        print_lg(f"Reached {total_applied} applications. Taking a 10 minute break...")
+                        sleep(batch_break_seconds)
 
 
 
@@ -1092,7 +1174,17 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     print_lg("Couldn't find pagination element, probably at the end page of results!")
                     break
                 try:
-                    pagination_element.find_element(By.XPATH, f"//button[@aria-label='Page {current_page+1}']").click()
+                    try:
+                        next_button = pagination_element.find_element(
+                            By.XPATH,
+                            f".//button[@aria-label='Page {current_page+1}']",
+                        )
+                    except NoSuchElementException:
+                        next_button = pagination_element.find_element(
+                            By.XPATH,
+                            ".//*[name()='path' and @d='m184 112 144 144-144 144']/ancestor::button[1]",
+                        )
+                    next_button.click()
                     print_lg(f"\n>-> Now on Page {current_page+1} \n")
                 except NoSuchElementException:
                     print_lg(f"\n>-> Didn't find Page {current_page+1}. Probably at the end page of results!\n")
@@ -1112,7 +1204,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
 
         
 def run(total_runs: int) -> int:
-    if dailyEasyApplyLimitReached:
+    if dailyEasyApplyLimitReached or application_target_reached:
         return total_runs
     print_lg("\n########################################################################################################################\n")
     print_lg(f"Date and Time: {datetime.now()}")
@@ -1120,7 +1212,7 @@ def run(total_runs: int) -> int:
     print_lg(f"Currently looking for jobs posted within '{date_posted}' and sorting them by '{sort_by}'")
     apply_to_jobs(search_terms)
     print_lg("########################################################################################################################\n")
-    if not dailyEasyApplyLimitReached:
+    if not dailyEasyApplyLimitReached and not application_target_reached:
         print_lg("Sleeping for 10 min...")
         sleep(300)
         print_lg("Few more min... Gonna start with in next 5 min...")
@@ -1184,6 +1276,8 @@ def main() -> None:
         driver.switch_to.window(linkedIn_tab)
         total_runs = run(total_runs)
         while(run_non_stop):
+            if application_target_reached:
+                break
             if cycle_date_posted:
                 date_options = ["Any time", "Past month", "Past week", "Past 24 hours"]
                 global date_posted
@@ -1214,27 +1308,14 @@ def main() -> None:
         print_lg("\nFailed jobs:                    {}".format(failed_count))
         print_lg("Irrelevant jobs skipped:        {}\n".format(skip_count))
         if randomly_answered_questions: print_lg("\n\nQuestions randomly answered:\n  {}  \n\n".format(";\n".join(str(question) for question in randomly_answered_questions)))
-        quotes = choice([
-            "Never quit. You're one step closer than before. - Sai Vignesh Golla", 
-            "All the best with your future interviews, you've got this. - Sai Vignesh Golla", 
-            "Keep up with the progress. You got this. - Sai Vignesh Golla", 
-            "If you're tired, learn to take rest but never give up. - Sai Vignesh Golla",
-            "Success is not final, failure is not fatal, It is the courage to continue that counts. - Winston Churchill (Not a sponsor)",
-            "Believe in yourself and all that you are. Know that there is something inside you that is greater than any obstacle. - Christian D. Larson (Not a sponsor)",
-            "Every job is a self-portrait of the person who does it. Autograph your work with excellence. - Jessica Guidobono (Not a sponsor)",
-            "The only way to do great work is to love what you do. If you haven't found it yet, keep looking. Don't settle. - Steve Jobs (Not a sponsor)",
-            "Opportunities don't happen, you create them. - Chris Grosser (Not a sponsor)",
-            "The road to success and the road to failure are almost exactly the same. The difference is perseverance. - Colin R. Davis (Not a sponsor)",
-            "Obstacles are those frightful things you see when you take your eyes off your goal. - Henry Ford (Not a sponsor)",
-            "The only limit to our realization of tomorrow will be our doubts of today. - Franklin D. Roosevelt (Not a sponsor)",
-            ])
-        sponsors = "Be the first to have your name here!"
+        quotes = "Live and let live"
+        sponsors = "Community Sponsors"
         timeSaved = (easy_applied_count * 80) + (external_jobs_count * 20) + (skip_count * 10)
         timeSavedMsg = ""
         if timeSaved > 0:
             timeSaved += 60
-            timeSavedMsg = f"In this run, you saved approx {round(timeSaved/60)} mins ({timeSaved} secs), please consider supporting the project."
-        msg = f"{quotes}\n\n\n{timeSavedMsg}\nYou can also get your quote and name shown here, or prioritize your bug reports by supporting the project at:\n\nhttps://github.com/sponsors/GodsScion\n\n\nSummary:\n{summary}\n\n\nBest regards,\nSai Vignesh Golla\nhttps://www.linkedin.com/in/saivigneshgolla/\n\nTop Sponsors:\n{sponsors}"
+            timeSavedMsg = f"In this run, you saved approx {round(timeSaved/60)} mins ({timeSaved} secs)."
+        msg = f\"{quotes}\\n\\n\\n{timeSavedMsg}\\n\\n\\nSummary:\\n{summary}\\n\\n\\nBest regards,\\nAuto Job Applier\\n\\nTop Sponsors:\\n{sponsors}\"
         pyautogui.alert(msg, "Exiting..")
         print_lg(msg,"Closing the browser...")
         if tabs_count >= 10:

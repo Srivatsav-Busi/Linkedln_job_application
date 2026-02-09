@@ -14,9 +14,9 @@ Support me: https://github.com/sponsors/GodsScion
 '''
 
 # Check if Python is installed
-if ! (python -V &> /dev/null || py -V &> /dev/null); then
+if ! (python -V &> /dev/null || python3 -V &> /dev/null || py -V &> /dev/null); then
     # Install the latest stable Python version
-    while ! (python -V &> /dev/null || py -V &> /dev/null);
+    while ! (python -V &> /dev/null || python3 -V &> /dev/null || py -V &> /dev/null);
     do
         echo "Python is not installed or not accessible!"
         echo "Please install Python and make sure it is added to your system's PATH environment variable."

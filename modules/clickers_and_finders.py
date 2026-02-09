@@ -36,10 +36,13 @@ def wait_span_click(driver: WebDriver, text: str, time: float=5.0, click: bool=T
     '''
     if text:
         try:
-            button = WebDriverWait(driver,time).until(EC.presence_of_element_located((By.XPATH, './/span[normalize-space(.)="'+text+'"]')))
+            button = WebDriverWait(driver,time).until(EC.element_to_be_clickable((By.XPATH, './/span[normalize-space(.)="'+text+'"]')))
             if scroll:  scroll_to_view(driver, button, scrollTop)
             if click:
-                button.click()
+                try:
+                    button.click()
+                except Exception:
+                    driver.execute_script("arguments[0].click();", button)
                 buffer(click_gap)
             return button
         except Exception as e:
@@ -53,13 +56,14 @@ def multi_sel(driver: WebDriver, texts: list, time: float=5.0) -> None:
     - Will spend a max of `time` seconds in searching for each element.
     '''
     for text in texts:
-        ##> ------ Dheeraj Deshwal : dheeraj20194@iiitd.ac.in/dheerajdeshwal9811@gmail.com - Bug fix ------
         wait_span_click(driver, text, time, False)
-        ##<
         try:
-            button = WebDriverWait(driver,time).until(EC.presence_of_element_located((By.XPATH, './/span[normalize-space(.)="'+text+'"]')))
+            button = WebDriverWait(driver,time).until(EC.element_to_be_clickable((By.XPATH, './/span[normalize-space(.)="'+text+'"]')))
             scroll_to_view(driver, button)
-            button.click()
+            try:
+                button.click()
+            except Exception:
+                driver.execute_script("arguments[0].click();", button)
             buffer(click_gap)
         except Exception as e:
             print_lg("Click Failed! Didn't find '"+text+"'")

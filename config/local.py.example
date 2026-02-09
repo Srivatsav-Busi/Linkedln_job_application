@@ -1,0 +1,12 @@
+"""
+Optional local overrides (git-ignored). Copy to config/local.py.
+Values here override .env, but are lower priority than OS env vars.
+"""
+
+ENV_OVERRIDES = {
+    "LINKEDIN_USERNAME": "username@example.com",
+    "LINKEDIN_PASSWORD": "example_password",
+    "SEARCH_TERMS": "Machine Learning Engineer,ML Engineer,Data Engineer",
+    "SEARCH_LOCATION": "United States",
+    "DEFAULT_RESUME_PATH": "all resumes/default/resume.pdf",
+}
