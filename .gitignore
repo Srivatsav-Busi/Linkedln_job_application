@@ -21,3 +21,4 @@ Screenshot*.png
 
 .drivers/
 bin/
+chromedriver.exe
